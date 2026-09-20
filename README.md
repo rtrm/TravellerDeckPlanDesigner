@@ -9,7 +9,7 @@ See [DeckDesigner.md](DeckDesigner.md) for the full architecture: rules constant
 Build order, from `DeckDesigner.md` section 7:
 
 - [x] 1. Grid renderer + pan/zoom
-- [ ] 2. Input sheet form + tons-to-squares budget math
+- [x] 2. Input sheet form + tons-to-squares budget math
 - [ ] 3. Component palette + drag/place/snap/collision (catalog mode)
 - [ ] 4. Zone-fill paint tool (Cargo, Fuel Tanks) with budget enforcement
 - [ ] 5. Multi-deck support (tabs) + live budget panel
