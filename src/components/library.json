@@ -1,0 +1,51 @@
+[
+  {
+    "id": "stateroom",
+    "label": "Stateroom",
+    "footprintSquares": { "w": 2, "h": 3 },
+    "category": "accommodation",
+    "icon": "St"
+  },
+  {
+    "id": "low_berth",
+    "label": "Low Berth",
+    "footprintSquares": { "w": 1, "h": 1 },
+    "category": "accommodation",
+    "icon": "LB"
+  },
+  {
+    "id": "bridge_small",
+    "label": "Bridge (Small Craft)",
+    "footprintSquares": { "w": 4, "h": 4 },
+    "category": "operations",
+    "icon": "Br"
+  },
+  {
+    "id": "bridge_standard",
+    "label": "Bridge (Standard)",
+    "footprintSquares": { "w": 6, "h": 4 },
+    "category": "operations",
+    "icon": "Br"
+  },
+  {
+    "id": "turret_single",
+    "label": "Single Turret",
+    "footprintSquares": { "w": 1, "h": 2 },
+    "category": "weapons",
+    "icon": "Tu"
+  },
+  {
+    "id": "airlock",
+    "label": "Airlock",
+    "footprintSquares": { "w": 1, "h": 2 },
+    "category": "access",
+    "icon": "Al"
+  },
+  {
+    "id": "engineering_bay",
+    "label": "Engineering Bay",
+    "footprintSquares": { "w": 4, "h": 4 },
+    "category": "engineering",
+    "icon": "En"
+  }
+]

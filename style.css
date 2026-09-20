@@ -18,6 +18,15 @@ html, body, #app {
   border-right: 1px solid #ddd;
 }
 
+#palette-panel {
+  flex: 0 0 200px;
+  overflow-y: auto;
+  padding: 16px;
+  box-sizing: border-box;
+  background: #fafafa;
+  border-right: 1px solid #ddd;
+}
+
 #grid-panel {
   flex: 1;
   min-width: 0;
@@ -110,4 +119,57 @@ table.budget-table tr:first-child {
   margin-top: 16px;
   padding-top: 12px;
   border-top: 2px solid #333;
+}
+
+.component-palette h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #555;
+  margin: 0 0 10px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: grab;
+  font-size: 13px;
+}
+
+.palette-item:active {
+  cursor: grabbing;
+}
+
+.palette-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 3px;
+  background: #eee;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.palette-label {
+  flex: 1;
+}
+
+.palette-footprint {
+  color: #888;
+  font-size: 11px;
+}
+
+#grid-panel svg .placed-component {
+  cursor: pointer;
 }
