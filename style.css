@@ -237,6 +237,8 @@ body.placing-component * {
   border-color: #333;
   border-width: 2px;
   padding: 5px 7px;
+  background: color-mix(in srgb, var(--zone-color, #999) 25%, white);
+  font-weight: 600;
 }
 
 .zone-swatch {
