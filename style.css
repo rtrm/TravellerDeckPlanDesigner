@@ -131,6 +131,12 @@ table.budget-table tr:first-child {
   padding-bottom: 4px;
 }
 
+.palette-hint {
+  font-size: 11px;
+  color: #888;
+  margin: 0 0 10px;
+}
+
 .palette-item {
   display: flex;
   align-items: center;
@@ -189,4 +195,9 @@ table.budget-table tr:first-child {
 
 #grid-panel svg .placed-component {
   cursor: pointer;
+}
+
+body.placing-component,
+body.placing-component * {
+  cursor: grabbing !important;
 }

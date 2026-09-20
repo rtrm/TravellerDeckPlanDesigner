@@ -14,7 +14,6 @@
 // everything together with no per-layer logic.
 
 import { footprintFor, isWithinBounds, findCollision } from "./snapping.js";
-import { dragState } from "../components/dragState.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MIN_ZOOM = 0.25;
@@ -170,56 +169,6 @@ export class GridCanvas {
       this._render();
     }, { passive: false });
 
-    this.svg.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-
-      const type = this.library.get(dragState.typeId);
-      if (!type) {
-        this._clearGhost();
-        return;
-      }
-
-      const placementRect = this._dropRectForEvent(e, type, dragState.rotation);
-      const valid = isWithinBounds(placementRect, this.widthSquares, this.heightSquares) &&
-        !findCollision(placementRect, this.components, this.library);
-      this._renderGhost(placementRect, valid);
-    });
-
-    this.svg.addEventListener("dragleave", (e) => {
-      if (e.target === this.svg) this._clearGhost();
-    });
-
-    this.svg.addEventListener("drop", (e) => {
-      e.preventDefault();
-      this._clearGhost();
-
-      const type = this.library.get(dragState.typeId);
-      if (!type) return;
-
-      const placementRect = this._dropRectForEvent(e, type, dragState.rotation);
-
-      if (!isWithinBounds(placementRect, this.widthSquares, this.heightSquares)) {
-        console.warn(`Cannot place ${type.label}: outside deck bounds`);
-        return;
-      }
-      if (findCollision(placementRect, this.components, this.library)) {
-        console.warn(`Cannot place ${type.label}: collides with an existing component`);
-        return;
-      }
-
-      const placed = {
-        id: crypto.randomUUID(),
-        typeId: dragState.typeId,
-        x: placementRect.x,
-        y: placementRect.y,
-        rotation: dragState.rotation
-      };
-      this.components.push(placed);
-      this.selectedId = placed.id;
-      this._renderComponents();
-    });
-
     window.addEventListener("keydown", (e) => {
       if (this.selectedId === null) return;
       const active = document.activeElement;
@@ -236,11 +185,60 @@ export class GridCanvas {
     });
   }
 
-  // Snapped grid rect a dragged ComponentType would occupy if dropped at
-  // this pointer event's position, at the given rotation.
-  _dropRectForEvent(e, type, rotation) {
+  // Public placement API, driven by ComponentPalette's pointer-based drag
+  // (see its own header comment for why it's pointer events, not native
+  // HTML5 drag-and-drop).
+  containsPoint(clientX, clientY) {
     const rect = this.svg.getBoundingClientRect();
-    const { col, row } = this.screenToGrid(e.clientX - rect.left, e.clientY - rect.top);
+    return clientX >= rect.left && clientX <= rect.right &&
+      clientY >= rect.top && clientY <= rect.bottom;
+  }
+
+  previewPlacement(clientX, clientY, type, rotation) {
+    const placementRect = this._snappedRect(clientX, clientY, type, rotation);
+    const valid = isWithinBounds(placementRect, this.widthSquares, this.heightSquares) &&
+      !findCollision(placementRect, this.components, this.library);
+    this._renderGhost(placementRect, valid);
+    return valid;
+  }
+
+  commitPlacement(clientX, clientY, type, rotation) {
+    const placementRect = this._snappedRect(clientX, clientY, type, rotation);
+    this.clearGhost();
+
+    if (!isWithinBounds(placementRect, this.widthSquares, this.heightSquares)) {
+      console.warn(`Cannot place ${type.label}: outside deck bounds`);
+      return false;
+    }
+    if (findCollision(placementRect, this.components, this.library)) {
+      console.warn(`Cannot place ${type.label}: collides with an existing component`);
+      return false;
+    }
+
+    const placed = {
+      id: crypto.randomUUID(),
+      typeId: type.id,
+      x: placementRect.x,
+      y: placementRect.y,
+      rotation
+    };
+    this.components.push(placed);
+    this.selectedId = placed.id;
+    this._renderComponents();
+    return true;
+  }
+
+  clearGhost() {
+    while (this.ghostLayer.firstChild) {
+      this.ghostLayer.removeChild(this.ghostLayer.firstChild);
+    }
+  }
+
+  // Snapped grid rect a ComponentType would occupy if placed at this
+  // screen point, at the given rotation.
+  _snappedRect(clientX, clientY, type, rotation) {
+    const rect = this.svg.getBoundingClientRect();
+    const { col, row } = this.screenToGrid(clientX - rect.left, clientY - rect.top);
     const footprint = footprintFor(type, rotation);
     return { x: Math.floor(col), y: Math.floor(row), w: footprint.w, h: footprint.h };
   }
@@ -261,12 +259,6 @@ export class GridCanvas {
     el.setAttribute("stroke-dasharray", "6,4");
     el.setAttribute("vector-effect", "non-scaling-stroke");
     this.ghostLayer.appendChild(el);
-  }
-
-  _clearGhost() {
-    while (this.ghostLayer.firstChild) {
-      this.ghostLayer.removeChild(this.ghostLayer.firstChild);
-    }
   }
 
   _rotateSelected() {

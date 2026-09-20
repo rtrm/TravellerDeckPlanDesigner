@@ -31,5 +31,6 @@ app.appendChild(gridPanel);
 new SheetEntryForm(sheetPanel).init();
 
 const componentLibrary = await fetch("./src/components/library.json").then((res) => res.json());
-new ComponentPalette(palettePanel, componentLibrary).init();
-new GridCanvas(gridPanel, { ...placeholderDeck, componentLibrary }).init();
+const gridCanvas = new GridCanvas(gridPanel, { ...placeholderDeck, componentLibrary });
+gridCanvas.init();
+new ComponentPalette(palettePanel, componentLibrary, gridCanvas).init();
