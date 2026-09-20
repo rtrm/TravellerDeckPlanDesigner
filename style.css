@@ -9,7 +9,7 @@ html, body, #app {
   height: 100%;
   display: block;
   touch-action: none;
-  background: #1b1b1f;
+  background: #ffffff;
   cursor: grab;
 }
 
