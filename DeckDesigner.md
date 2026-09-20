@@ -89,8 +89,8 @@ LightSource
 ```
 
 **Placement modes:**
-- **Catalog** (fixed footprint, drag-from-palette): Staterooms, Low Berths, Bridge, weapon turrets, and other line items that are naturally discrete rooms.
-- **Zone-fill** (freeform, paint-N-squares): Cargo, Fuel Tanks, and anything else that's really "N squares of X" rather than a room with a fixed shape — a click-and-drag paint tool that fills grid cells and stops once the line item's square budget is spent.
+- **Catalog** (fixed footprint, drag-from-palette): Staterooms, Bridge, weapon turrets, airlocks, and other line items that are naturally one discrete, regularly-shaped room.
+- **Zone-fill** (freeform, paint-N-squares): Cargo, Fuel Tanks, Low Berths, Engineering, Common Areas, and anything else that's really "N squares of X" rather than a room with a fixed shape - either because it has no canonical shape (cargo, fuel) or because it's routinely split up/irregular in practice (engineering, low-berth banks). A click-and-drag paint tool fills grid cells and stops once the pool's square budget is spent. Low Berths gets its own dedicated input-sheet fields (count/tons-each) rather than being a generic `LineItem`, but its resulting square budget is still a zone-fill pool, not a catalog component.
 
 Each `LineItem` (and the derived stateroom/low-berth pools) carries its own square budget = `tons * 2`, independent of the others — the budget tracker (section 5) reports remaining squares per line item, not just an overall total.
 

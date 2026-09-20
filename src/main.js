@@ -1,6 +1,8 @@
 import { GridCanvas } from "./grid/GridCanvas.js";
 import { SheetEntryForm } from "./input/SheetEntryForm.js";
+import { paintablePools } from "./input/sheetToBudget.js";
 import { ComponentPalette } from "./components/ComponentPalette.js";
+import { ZonePalette } from "./ui/ZonePalette.js";
 
 // TEMP placeholder — a later build-order step drives deck dimensions from
 // the input sheet's budget instead of this fixed size. Deliberately
@@ -28,9 +30,15 @@ const gridPanel = document.createElement("div");
 gridPanel.id = "grid-panel";
 app.appendChild(gridPanel);
 
-new SheetEntryForm(sheetPanel).init();
-
 const componentLibrary = await fetch("./src/components/library.json").then((res) => res.json());
 const gridCanvas = new GridCanvas(gridPanel, { ...placeholderDeck, componentLibrary });
 gridCanvas.init();
+
 new ComponentPalette(palettePanel, componentLibrary, gridCanvas).init();
+
+const zonePalette = new ZonePalette(palettePanel, gridCanvas);
+zonePalette.init();
+
+new SheetEntryForm(sheetPanel, {
+  onBudgetComputed: (budget) => zonePalette.setPools(paintablePools(budget))
+}).init();

@@ -58,6 +58,23 @@ export function sheetToBudget(sheet) {
   };
 }
 
+// Which of a computed budget's groups make sense as zone-fill paint
+// targets (DeckDesigner.md section 2): Staterooms are always a fixed
+// catalog room shape, so excluded. Low Berths and the combined Common
+// Areas pool have no fixed room shape (or are routinely irregular), so
+// they're always zone-fill regardless of how they entered the sheet. Any
+// other line item follows whichever placementMode the user chose for it.
+export function paintablePools(budget) {
+  return budget.groups
+    .filter((group) => {
+      if (group.key === "staterooms") return false;
+      if (group.key === "lowBerths" || group.key === "commonArea") return true;
+      const source = budget.pools.find((p) => p.key === group.sources[0]);
+      return source?.placementMode !== "catalog";
+    })
+    .map((group) => ({ key: group.key, label: group.label, totalSquares: group.squares }));
+}
+
 function stateroomPools(staterooms, mode) {
   const totalTons = staterooms.count * staterooms.tonsEach;
   const totalSquares = tonsToSquares(totalTons);

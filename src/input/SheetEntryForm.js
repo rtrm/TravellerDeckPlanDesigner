@@ -3,13 +3,14 @@ import { sheetToBudget } from "./sheetToBudget.js";
 // UI for transcribing a ship's design-sequence output sheet (the tonnage
 // sheet - hull, staterooms, common areas, cargo, etc.) into a ShipInputSheet
 // (DeckDesigner.md section 2), and displaying the resulting per-line square
-// budgets computed by sheetToBudget.js. Nothing here feeds the grid/deck
-// yet - that link (deck dimensions driven by the budget) is a later build-
-// order step; this step just has to get the input form and the tons-to-
-// squares math right.
+// budgets computed by sheetToBudget.js. Deck dimensions still aren't driven
+// by the budget yet - that's a later build-order step - but as of step 4,
+// onBudgetComputed lets a caller (ZonePalette, via main.js) pick up the
+// zone-fill pools whenever the budget is recomputed.
 export class SheetEntryForm {
-  constructor(container) {
+  constructor(container, { onBudgetComputed } = {}) {
     this.container = container;
+    this.onBudgetComputed = onBudgetComputed;
     this.lineItems = [{ label: "Common Areas", tons: 5.5, placementMode: "zoneFill" }];
   }
 
@@ -72,6 +73,7 @@ export class SheetEntryForm {
       e.preventDefault();
       this.lastBudget = sheetToBudget(this._readSheet(form));
       this._render();
+      this.onBudgetComputed?.(this.lastBudget);
     });
 
     this._form = form;

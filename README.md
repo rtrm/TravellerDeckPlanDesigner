@@ -11,7 +11,7 @@ Build order, from `DeckDesigner.md` section 7:
 - [x] 1. Grid renderer + pan/zoom
 - [x] 2. Input sheet form + tons-to-squares budget math
 - [x] 3. Component palette + drag/place/snap/collision (catalog mode)
-- [ ] 4. Zone-fill paint tool (Cargo, Fuel Tanks) with budget enforcement
+- [x] 4. Zone-fill paint tool (Cargo, Fuel Tanks) with budget enforcement
 - [ ] 5. Multi-deck support (tabs) + live budget panel
 - [ ] 6. PNG/SVG export
 - [ ] 7. Wall/door drawing tool

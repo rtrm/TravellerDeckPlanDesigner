@@ -1,19 +1,23 @@
-// Renders a deck's square grid as SVG, handles pan/zoom, and (build-order
-// step 3) is the drop target for catalog-mode component placement.
+// Renders a deck's square grid as SVG, handles pan/zoom, is the drop
+// target for catalog-mode component placement (build-order step 3), and
+// (step 4) hosts zone-fill painting for pools with no fixed room shape.
 //
 // SVG (not <canvas>) so that later build-order steps — walls/doors as line
 // segments, lights as points, component footprints as rects/polygons — can
 // each be a real, individually selectable DOM node with native pointer
 // events, instead of hand-rolled hit-testing on a canvas. The grid itself is
 // a single tiled <pattern> fill rather than one element per cell, since
-// zone-fill painting (a later step) hit-tests cells via screenToGrid()
-// coordinate math anyway, not by clicking per-cell elements.
+// zone-fill painting hit-tests cells via screenToGrid() coordinate math
+// anyway, not by clicking per-cell elements.
 //
-// One shared <g id="viewport"> transform group holds the grid background and
-// the components layer, so pan/zoom is a single transform that moves
-// everything together with no per-layer logic.
-
+// One shared <g id="viewport"> transform group holds every other layer, so
+// pan/zoom is a single transform that moves everything together with no
+// per-layer logic. Layer order (bottom to top): zonesLayer (painted cell
+// fills), gridRect (grid lines only — its pattern cells have no fill, so
+// lines render on top of zone paint but the zone colors show through
+// between them), componentsLayer, ghostLayer.
 import { footprintFor, isWithinBounds, findCollision } from "./snapping.js";
+import { cellKey, parseCellKey } from "./zonePaint.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MIN_ZOOM = 0.25;
@@ -29,6 +33,8 @@ const CATEGORY_COLORS = {
   access: "#adb5bd"
 };
 
+const ZONE_COLORS = ["#e76f51", "#2a9d8f", "#e9c46a", "#264653", "#f4a261", "#8ab17d", "#9d4edd", "#457b9d"];
+
 export class GridCanvas {
   constructor(container, { widthSquares, heightSquares, pixelsPerSquare, componentLibrary = [] }) {
     this.container = container;
@@ -39,6 +45,14 @@ export class GridCanvas {
     this.library = new Map(componentLibrary.map((type) => [type.id, type]));
     this.components = []; // PlacedComponent[]
     this.selectedId = null;
+
+    this.zones = new Map(); // poolKey -> { squares: Set<"x,y"> }
+    this.paintPools = new Map(); // poolKey -> { key, label, totalSquares }
+    this.poolColors = new Map(); // poolKey -> color, assigned on first sight
+    this.activePoolKey = null;
+    this.isPainting = false;
+    this.paintErasing = false;
+    this.onZoneChange = null; // set by ZonePalette to refresh usage counts
 
     this.zoom = 1;
     this.panX = 0;
@@ -73,6 +87,11 @@ export class GridCanvas {
     this.viewport.setAttribute("id", "viewport");
     this.svg.appendChild(this.viewport);
 
+    this.zonesLayer = document.createElementNS(SVG_NS, "g");
+    this.zonesLayer.setAttribute("id", "zones-layer");
+    this.zonesLayer.setAttribute("pointer-events", "none");
+    this.viewport.appendChild(this.zonesLayer);
+
     this.gridRect = document.createElementNS(SVG_NS, "rect");
     this.gridRect.setAttribute("x", "0");
     this.gridRect.setAttribute("y", "0");
@@ -95,6 +114,7 @@ export class GridCanvas {
     this._wireEvents();
     this._render();
     this._renderComponents();
+    this._renderZones();
   }
 
   // Converts a screen-pixel coordinate (e.g. from a PointerEvent's
@@ -114,6 +134,16 @@ export class GridCanvas {
 
   _wireEvents() {
     this.svg.addEventListener("pointerdown", (e) => {
+      if (this.activePoolKey && e.button !== 1) {
+        // Zone-paint mode: left paints, right erases (middle still pans).
+        e.preventDefault();
+        this.isPainting = true;
+        this.paintErasing = e.button === 2;
+        this.svg.setPointerCapture(e.pointerId);
+        this._paintAt(e.clientX, e.clientY, this.paintErasing);
+        return;
+      }
+
       const componentEl = e.target.closest("[data-component-id]");
       if (componentEl) {
         this.selectedId = componentEl.dataset.componentId;
@@ -132,6 +162,10 @@ export class GridCanvas {
     });
 
     this.svg.addEventListener("pointermove", (e) => {
+      if (this.isPainting) {
+        this._paintAt(e.clientX, e.clientY, this.paintErasing);
+        return;
+      }
       if (!this.isDragging) return;
       this.panX = this.dragStart.panX + (e.clientX - this.dragStart.x);
       this.panY = this.dragStart.panY + (e.clientY - this.dragStart.y);
@@ -139,15 +173,21 @@ export class GridCanvas {
     });
 
     const endDrag = (e) => {
-      if (!this.isDragging) return;
-      this.isDragging = false;
-      this.svg.classList.remove("dragging");
+      this.isPainting = false;
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.svg.classList.remove("dragging");
+      }
       if (e.pointerId !== undefined) {
         try { this.svg.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
       }
     };
     this.svg.addEventListener("pointerup", endDrag);
     this.svg.addEventListener("pointercancel", endDrag);
+
+    this.svg.addEventListener("contextmenu", (e) => {
+      if (this.activePoolKey) e.preventDefault(); // right-drag erases, no browser menu
+    });
 
     this.svg.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -259,6 +299,110 @@ export class GridCanvas {
     el.setAttribute("stroke-dasharray", "6,4");
     el.setAttribute("vector-effect", "non-scaling-stroke");
     this.ghostLayer.appendChild(el);
+  }
+
+  // Public zone-fill API, driven by ZonePalette.
+  setPaintPools(pools) {
+    this.paintPools = new Map(pools.map((p) => [p.key, p]));
+    for (const pool of pools) {
+      if (!this.poolColors.has(pool.key)) {
+        this.poolColors.set(pool.key, ZONE_COLORS[this.poolColors.size % ZONE_COLORS.length]);
+      }
+    }
+    this._renderZones();
+  }
+
+  setActivePool(poolKey) {
+    this.activePoolKey = poolKey;
+    this.svg.classList.toggle("painting", poolKey !== null);
+  }
+
+  getZoneUsage(poolKey) {
+    return this.zones.get(poolKey)?.squares.size ?? 0;
+  }
+
+  getPoolColor(poolKey) {
+    return this.poolColors.get(poolKey) ?? "#999999";
+  }
+
+  _paintAt(clientX, clientY, erase) {
+    if (!this.activePoolKey) return;
+    const rect = this.svg.getBoundingClientRect();
+    const { col, row } = this.screenToGrid(clientX - rect.left, clientY - rect.top);
+    const x = Math.floor(col);
+    const y = Math.floor(row);
+    if (x < 0 || y < 0 || x >= this.widthSquares || y >= this.heightSquares) return;
+    const key = cellKey(x, y);
+
+    if (erase) {
+      let changed = false;
+      for (const zone of this.zones.values()) {
+        if (zone.squares.delete(key)) changed = true;
+      }
+      if (!changed) return;
+      this._renderZones();
+      this.onZoneChange?.();
+      return;
+    }
+
+    if (this._cellOccupiedByComponent(x, y)) return;
+
+    const pool = this.paintPools.get(this.activePoolKey);
+    if (!pool) return;
+
+    const zone = this._zoneFor(this.activePoolKey);
+    if (zone.squares.has(key)) return; // already painted for this pool
+
+    if (zone.squares.size >= pool.totalSquares) {
+      console.warn(`Cannot paint: ${pool.label} budget (${pool.totalSquares} squares) already used`);
+      return;
+    }
+
+    // A cell belongs to at most one pool - reassign it from any other.
+    for (const [poolKey, otherZone] of this.zones) {
+      if (poolKey !== this.activePoolKey) otherZone.squares.delete(key);
+    }
+
+    zone.squares.add(key);
+    this._renderZones();
+    this.onZoneChange?.();
+  }
+
+  _zoneFor(poolKey) {
+    if (!this.zones.has(poolKey)) {
+      this.zones.set(poolKey, { squares: new Set() });
+    }
+    return this.zones.get(poolKey);
+  }
+
+  _cellOccupiedByComponent(x, y) {
+    return this.components.some((pc) => {
+      const type = this.library.get(pc.typeId);
+      if (!type) return false;
+      const footprint = footprintFor(type, pc.rotation);
+      return x >= pc.x && x < pc.x + footprint.w && y >= pc.y && y < pc.y + footprint.h;
+    });
+  }
+
+  _renderZones() {
+    while (this.zonesLayer.firstChild) {
+      this.zonesLayer.removeChild(this.zonesLayer.firstChild);
+    }
+
+    for (const [poolKey, zone] of this.zones) {
+      const color = this.getPoolColor(poolKey);
+      for (const key of zone.squares) {
+        const { x, y } = parseCellKey(key);
+        const rect = document.createElementNS(SVG_NS, "rect");
+        rect.setAttribute("x", x * this.pixelsPerSquare);
+        rect.setAttribute("y", y * this.pixelsPerSquare);
+        rect.setAttribute("width", this.pixelsPerSquare);
+        rect.setAttribute("height", this.pixelsPerSquare);
+        rect.setAttribute("fill", color);
+        rect.setAttribute("fill-opacity", "0.55");
+        this.zonesLayer.appendChild(rect);
+      }
+    }
   }
 
   _rotateSelected() {
