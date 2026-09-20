@@ -170,6 +170,23 @@ table.budget-table tr:first-child {
   font-size: 11px;
 }
 
+.palette-rotate {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.palette-rotate:hover {
+  background: #eee;
+}
+
 #grid-panel svg .placed-component {
   cursor: pointer;
 }

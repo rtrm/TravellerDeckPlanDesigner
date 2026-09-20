@@ -14,6 +14,7 @@
 // everything together with no per-layer logic.
 
 import { footprintFor, isWithinBounds, findCollision } from "./snapping.js";
+import { dragState } from "../components/dragState.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MIN_ZOOM = 0.25;
@@ -84,6 +85,11 @@ export class GridCanvas {
     this.componentsLayer = document.createElementNS(SVG_NS, "g");
     this.componentsLayer.setAttribute("id", "components-layer");
     this.viewport.appendChild(this.componentsLayer);
+
+    this.ghostLayer = document.createElementNS(SVG_NS, "g");
+    this.ghostLayer.setAttribute("id", "placement-ghost");
+    this.ghostLayer.setAttribute("pointer-events", "none");
+    this.viewport.appendChild(this.ghostLayer);
 
     this.container.appendChild(this.svg);
 
@@ -167,20 +173,31 @@ export class GridCanvas {
     this.svg.addEventListener("dragover", (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
+
+      const type = this.library.get(dragState.typeId);
+      if (!type) {
+        this._clearGhost();
+        return;
+      }
+
+      const placementRect = this._dropRectForEvent(e, type, dragState.rotation);
+      const valid = isWithinBounds(placementRect, this.widthSquares, this.heightSquares) &&
+        !findCollision(placementRect, this.components, this.library);
+      this._renderGhost(placementRect, valid);
+    });
+
+    this.svg.addEventListener("dragleave", (e) => {
+      if (e.target === this.svg) this._clearGhost();
     });
 
     this.svg.addEventListener("drop", (e) => {
       e.preventDefault();
-      const typeId = e.dataTransfer.getData("text/component-type-id");
-      const type = this.library.get(typeId);
+      this._clearGhost();
+
+      const type = this.library.get(dragState.typeId);
       if (!type) return;
 
-      const rect = this.svg.getBoundingClientRect();
-      const { col, row } = this.screenToGrid(e.clientX - rect.left, e.clientY - rect.top);
-      const x = Math.floor(col);
-      const y = Math.floor(row);
-      const footprint = footprintFor(type, 0);
-      const placementRect = { x, y, w: footprint.w, h: footprint.h };
+      const placementRect = this._dropRectForEvent(e, type, dragState.rotation);
 
       if (!isWithinBounds(placementRect, this.widthSquares, this.heightSquares)) {
         console.warn(`Cannot place ${type.label}: outside deck bounds`);
@@ -191,12 +208,15 @@ export class GridCanvas {
         return;
       }
 
-      this.components.push({
+      const placed = {
         id: crypto.randomUUID(),
-        typeId,
-        x, y,
-        rotation: 0
-      });
+        typeId: dragState.typeId,
+        x: placementRect.x,
+        y: placementRect.y,
+        rotation: dragState.rotation
+      };
+      this.components.push(placed);
+      this.selectedId = placed.id;
       this._renderComponents();
     });
 
@@ -214,6 +234,39 @@ export class GridCanvas {
         this._rotateSelected();
       }
     });
+  }
+
+  // Snapped grid rect a dragged ComponentType would occupy if dropped at
+  // this pointer event's position, at the given rotation.
+  _dropRectForEvent(e, type, rotation) {
+    const rect = this.svg.getBoundingClientRect();
+    const { col, row } = this.screenToGrid(e.clientX - rect.left, e.clientY - rect.top);
+    const footprint = footprintFor(type, rotation);
+    return { x: Math.floor(col), y: Math.floor(row), w: footprint.w, h: footprint.h };
+  }
+
+  _renderGhost(rect, valid) {
+    while (this.ghostLayer.firstChild) {
+      this.ghostLayer.removeChild(this.ghostLayer.firstChild);
+    }
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("x", rect.x * this.pixelsPerSquare);
+    el.setAttribute("y", rect.y * this.pixelsPerSquare);
+    el.setAttribute("width", rect.w * this.pixelsPerSquare);
+    el.setAttribute("height", rect.h * this.pixelsPerSquare);
+    el.setAttribute("fill", valid ? "#2a9d8f" : "#e63946");
+    el.setAttribute("fill-opacity", "0.35");
+    el.setAttribute("stroke", valid ? "#2a9d8f" : "#e63946");
+    el.setAttribute("stroke-width", "2");
+    el.setAttribute("stroke-dasharray", "6,4");
+    el.setAttribute("vector-effect", "non-scaling-stroke");
+    this.ghostLayer.appendChild(el);
+  }
+
+  _clearGhost() {
+    while (this.ghostLayer.firstChild) {
+      this.ghostLayer.removeChild(this.ghostLayer.firstChild);
+    }
   }
 
   _rotateSelected() {
